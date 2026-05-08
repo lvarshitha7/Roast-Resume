@@ -4,6 +4,7 @@ import Navbar from './components/Navbar';
 import LandingPage from './pages/LandingPage';
 import ResultPage from './pages/ResultPage';
 import HistoryPage from './pages/HistoryPage';
+import Footer from './components/Footer';
 
 export default function App() {
   return (
@@ -12,12 +13,13 @@ export default function App() {
       <Navbar />
       <main>
         <Routes>
-          <Route path="/"          element={<LandingPage />} />
-          <Route path="/result"    element={<ResultPage />} />
-          <Route path="/history"   element={<HistoryPage />} />
-          <Route path="*"          element={<Navigate to="/" replace />} />
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/result" element={<ResultPage />} />
+          <Route path="/history" element={<HistoryPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      <Footer />
     </>
   );
 }

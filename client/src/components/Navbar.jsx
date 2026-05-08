@@ -2,138 +2,116 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 export default function Navbar() {
-  const location = useLocation();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
 
   const links = [
-    { to: '/', label: 'Analyze' },
+    { to: '/',        label: 'Analyze' },
     { to: '/history', label: 'History' },
   ];
 
   return (
-    <nav style={styles.nav}>
-      <div style={styles.inner}>
+    <nav style={s.nav}>
+      <div style={s.inner}>
         {/* Logo */}
-        <Link to="/" style={styles.logo}>
-          <span style={styles.logoIcon}>🔥</span>
-          <span style={styles.logoText}>
-            Roast<span style={styles.logoAccent}>Resume</span>
-          </span>
+        <Link to="/" style={s.logo}>
+          <span style={s.logoIcon}>🔥</span>
+          <span style={s.logoText}>Roast<span style={s.logoAccent}>Resume</span></span>
         </Link>
 
-        {/* Desktop links */}
-        <div style={styles.links}>
-          {links.map(({ to, label }) => (
-            <Link
-              key={to}
-              to={to}
-              style={{
-                ...styles.link,
-                ...(location.pathname === to ? styles.linkActive : {}),
-              }}
-            >
-              {label}
+        {/* Desktop Links */}
+        <div style={s.desktopLinks}>
+          {links.map(l => (
+            <Link key={l.to} to={l.to} style={{ ...s.navLink, ...(pathname === l.to ? s.navLinkActive : {}) }}>
+              {l.label}
             </Link>
           ))}
+          <Link to="/" style={s.ctaBtn}>Get Roasted 🔥</Link>
         </div>
 
-        {/* Mobile toggle */}
+        {/* Mobile hamburger */}
         <button
-          style={styles.mobileBtn}
-          onClick={() => setMobileOpen(!mobileOpen)}
+          onClick={() => setOpen(!open)}
+          style={s.hamburger}
           aria-label="Toggle menu"
         >
-          {mobileOpen ? '✕' : '☰'}
+          <span style={{ ...s.bar, transform: open ? 'rotate(45deg) translate(5px,5px)' : 'none' }} />
+          <span style={{ ...s.bar, opacity: open ? 0 : 1 }} />
+          <span style={{ ...s.bar, transform: open ? 'rotate(-45deg) translate(5px,-5px)' : 'none' }} />
         </button>
       </div>
 
       {/* Mobile menu */}
-      {mobileOpen && (
-        <div style={styles.mobileMenu}>
-          {links.map(({ to, label }) => (
-            <Link
-              key={to}
-              to={to}
-              style={styles.mobileLink}
-              onClick={() => setMobileOpen(false)}
-            >
-              {label}
-            </Link>
+      {open && (
+        <div style={s.mobileMenu}>
+          {links.map(l => (
+            <Link key={l.to} to={l.to} style={s.mobileLink} onClick={() => setOpen(false)}>{l.label}</Link>
           ))}
+          <Link to="/" style={s.mobileCta} onClick={() => setOpen(false)}>Get Roasted 🔥</Link>
         </div>
       )}
     </nav>
   );
 }
 
-const styles = {
+const s = {
   nav: {
-    position: 'sticky',
-    top: 0,
-    zIndex: 100,
-    background: 'rgba(8, 8, 18, 0.85)',
-    backdropFilter: 'blur(20px)',
-    WebkitBackdropFilter: 'blur(20px)',
-    borderBottom: '1px solid rgba(255,255,255,0.06)',
+    position: 'sticky', top: 0, zIndex: 100,
+    background: 'rgba(255,255,255,0.95)',
+    backdropFilter: 'blur(12px)',
+    borderBottom: '1px solid #e5e7eb',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
   },
   inner: {
-    maxWidth: 1200,
-    margin: '0 auto',
-    padding: '0 24px',
-    height: 64,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    maxWidth: 1100, margin: '0 auto', padding: '0 24px',
+    height: 58, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
   },
-  logo: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    textDecoration: 'none',
+  logo:      { display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none' },
+  logoIcon:  { fontSize: '1.4rem' },
+  logoText:  { fontFamily: "'Space Grotesk', sans-serif", fontWeight: 800, fontSize: '1.15rem', color: '#111827' },
+  logoAccent:{ color: '#ff6b35' },
+
+  desktopLinks: { display: 'flex', alignItems: 'center', gap: 4 },
+  navLink: {
+    padding: '6px 14px', borderRadius: 8,
+    fontWeight: 600, fontSize: '0.88rem', color: '#374151',
+    transition: 'all 0.15s', textDecoration: 'none',
   },
-  logoIcon: { fontSize: '1.5rem' },
-  logoText: {
-    fontFamily: "'Space Grotesk', sans-serif",
-    fontSize: '1.25rem',
-    fontWeight: 700,
-    color: '#f0f0ff',
+  navLinkActive: { background: '#fff8f5', color: '#ff6b35' },
+  ctaBtn: {
+    marginLeft: 8, padding: '7px 16px',
+    background: 'linear-gradient(135deg, #ff6b35, #f7931e)',
+    borderRadius: 8, color: '#fff',
+    fontWeight: 700, fontSize: '0.85rem', textDecoration: 'none',
+    boxShadow: '0 2px 8px rgba(255,107,53,0.3)',
+    transition: 'transform 0.15s, box-shadow 0.15s',
   },
-  logoAccent: { color: '#ff6b35' },
-  links: { display: 'flex', gap: 8, alignItems: 'center' },
-  link: {
-    padding: '6px 16px',
-    borderRadius: 8,
-    fontSize: '0.9rem',
-    fontWeight: 500,
-    color: '#a0a0c0',
-    textDecoration: 'none',
-    transition: 'all 0.2s ease',
+
+  hamburger: {
+    display: 'none', flexDirection: 'column', gap: 4,
+    background: 'none', border: 'none', padding: 4, cursor: 'pointer',
+    '@media(max-width:640px)': { display: 'flex' },
   },
-  linkActive: {
-    color: '#ff6b35',
-    background: 'rgba(255,107,53,0.1)',
-  },
-  mobileBtn: {
-    display: 'none',
-    background: 'none',
-    border: 'none',
-    color: '#f0f0ff',
-    fontSize: '1.25rem',
-    cursor: 'pointer',
-    padding: '8px',
+  bar: {
+    display: 'block', width: 22, height: 2,
+    background: '#374151', borderRadius: 2,
+    transition: 'all 0.25s ease',
   },
   mobileMenu: {
+    display: 'flex', flexDirection: 'column',
     padding: '12px 24px 16px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
-    borderTop: '1px solid rgba(255,255,255,0.06)',
+    borderTop: '1px solid #e5e7eb',
+    gap: 4, background: '#fff',
   },
   mobileLink: {
-    padding: '10px 12px',
-    borderRadius: 8,
-    color: '#a0a0c0',
-    textDecoration: 'none',
-    fontWeight: 500,
+    padding: '10px 14px', borderRadius: 8, fontWeight: 600,
+    color: '#374151', textDecoration: 'none', fontSize: '0.9rem',
+  },
+  mobileCta: {
+    marginTop: 6, padding: '10px 14px',
+    background: 'linear-gradient(135deg, #ff6b35, #f7931e)',
+    borderRadius: 8, color: '#fff',
+    fontWeight: 700, fontSize: '0.9rem', textDecoration: 'none',
+    textAlign: 'center',
   },
 };

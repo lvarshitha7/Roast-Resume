@@ -1,4 +1,9 @@
 require('dotenv').config();
+// Force Google DNS (8.8.8.8) to resolve MongoDB Atlas SRV records
+// bypassing routers that block the default DNS SRV lookup
+const dns = require('dns');
+dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -63,13 +68,27 @@ if (process.env.NODE_ENV !== 'test') {
 
 // ─── Health Check ─────────────────────────────────────────────────────────────
 app.get('/health', (req, res) => {
+  const mongoState = mongoose.connection.readyState;
+  const mongoStatus = ['disconnected', 'connected', 'connecting', 'disconnecting'][mongoState] || 'unknown';
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
-    mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    mongo: mongoStatus,
+    mongoRequired: mongoState === 1,
   });
 });
+
+// Middleware: returns 503 when MongoDB is not connected (used on DB-dependent routes)
+const requireMongo = (req, res, next) => {
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({
+      error: 'Database is currently unavailable. Resume analysis still works, but saving/history requires a database connection.',
+      hint: 'Contact the admin or try again later.',
+    });
+  }
+  next();
+};
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
 app.use('/api/resume', resumeRoutes);
@@ -92,13 +111,17 @@ app.use((err, req, res, next) => {
 });
 
 // ─── MongoDB Connection + Server Boot ─────────────────────────────────────────
-const connectWithRetry = async (retries = 5, delay = 5000) => {
+let mongoConnected = false;
+
+const connectWithRetry = async (retries = 3, delay = 4000) => {
   for (let i = 0; i < retries; i++) {
     try {
       await mongoose.connect(process.env.MONGODB_URI, {
-        serverSelectionTimeoutMS: 10000,
+        serverSelectionTimeoutMS: 8000,
         socketTimeoutMS: 45000,
+        family: 4, // force IPv4 to avoid IPv6 resolution issues
       });
+      mongoConnected = true;
       console.log('✅  MongoDB connected');
       return;
     } catch (err) {
@@ -106,16 +129,17 @@ const connectWithRetry = async (retries = 5, delay = 5000) => {
       if (i < retries - 1) await new Promise(r => setTimeout(r, delay));
     }
   }
-  console.error('💀  Could not connect to MongoDB after multiple retries. Exiting.');
-  process.exit(1);
+  console.warn('⚠️   MongoDB unavailable — server will start without DB. Save/history endpoints will return 503.');
 };
 
 const startServer = async () => {
-  await connectWithRetry();
+  // Start server immediately, connect to MongoDB in parallel
   app.listen(PORT, () => {
     console.log(`🚀  ResumeFlame API running on http://localhost:${PORT}`);
     console.log(`📋  Environment: ${process.env.NODE_ENV}`);
   });
+  // Attempt DB connection after server is up
+  await connectWithRetry();
 };
 
 // Graceful shutdown

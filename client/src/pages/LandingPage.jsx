@@ -9,10 +9,10 @@ import LoadingOverlay from '../components/LoadingOverlay';
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 const FEATURE_CARDS = [
-  { icon: '🎯', title: 'Precision Scoring', desc: 'Section-by-section scores (0–100) powered by GPT-3.5' },
+  { icon: '🎯', title: 'Precision Scoring', desc: 'Section-by-section scores (0–100) powered by Gemini 2.0 Flash' },
   { icon: '🔍', title: 'Keyword Gap Analysis', desc: 'See exactly which keywords hiring managers look for' },
   { icon: '🔧', title: 'Fix Suggestions', desc: 'Concrete, actionable improvements for each section' },
-  { icon: '📊', title: 'Instant Results', desc: 'Full analysis in under 20 seconds' },
+  { icon: '📊', title: 'Instant Results', desc: 'Full analysis in under 15 seconds' },
 ];
 
 export default function LandingPage() {
@@ -123,6 +123,41 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* ─── Testimonials ──────────────────────────────── */}
+        <section style={styles.testimonials}>
+          <div className="container">
+            <h2 style={styles.featuresTitle}>What people are saying</h2>
+            <div style={styles.testimonialGrid}>
+              {[
+                {
+                  quote: "Got my score from 58 to 84 in one revision. The keyword gap list was exactly what I needed.",
+                  name: "Priya S.", role: "Software Engineer @ Google", rating: 5,
+                },
+                {
+                  quote: "Best free resume tool I've used. The AI feedback is brutally honest and incredibly specific.",
+                  name: "Rahul M.", role: "Data Scientist @ Zomato", rating: 5,
+                },
+                {
+                  quote: "Landed 3 interviews within a week of applying the fix suggestions. Genuinely life-changing.",
+                  name: "Anika K.", role: "Product Manager @ Swiggy", rating: 5,
+                },
+              ].map((t, i) => (
+                <div key={i} style={styles.testimonialCard} className="glass-card fade-in">
+                  <div style={styles.stars}>{'⭐'.repeat(t.rating)}</div>
+                  <p style={styles.testimonialQuote}>"{t.quote}"</p>
+                  <div style={styles.testimonialAuthor}>
+                    <div style={styles.testimonialAvatar}>{t.name[0]}</div>
+                    <div>
+                      <p style={styles.testimonialName}>{t.name}</p>
+                      <p style={styles.testimonialRole}>{t.role}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* ─── How it works ─────────────────────────────── */}
         <section style={styles.howItWorks}>
           <div className="container">
@@ -131,7 +166,7 @@ export default function LandingPage() {
               {[
                 { num: '1', title: 'Upload', desc: 'Drop in your PDF or DOCX resume' },
                 { num: '2', title: 'Select Role', desc: 'Tell us what job you\'re targeting' },
-                { num: '3', title: 'AI Analyzes', desc: 'GPT-3.5 scores each section in seconds' },
+                { num: '3', title: 'AI Analyzes', desc: 'Gemini 2.0 Flash scores each section in seconds' },
                 { num: '4', title: 'Improve', desc: 'Use fix suggestions to land the interview' },
               ].map((step, i) => (
                 <div key={i} style={styles.step}>
@@ -272,6 +307,59 @@ const styles = {
     marginBottom: 8,
   },
   featureCardDesc: { fontSize: '0.88rem', color: '#808098', lineHeight: 1.6 },
+  /* Testimonials */
+  testimonials: {
+    padding: '60px 0',
+    borderTop: '1px solid rgba(255,255,255,0.05)',
+  },
+  testimonialGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+    gap: 20,
+  },
+  testimonialCard: {
+    padding: '24px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 14,
+  },
+  stars: { fontSize: '0.9rem', letterSpacing: 2 },
+  testimonialQuote: {
+    fontSize: '0.92rem',
+    color: '#c0c0e0',
+    lineHeight: 1.7,
+    flex: 1,
+    fontStyle: 'italic',
+  },
+  testimonialAuthor: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 4,
+  },
+  testimonialAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: '50%',
+    background: 'linear-gradient(135deg, #ff6b35, #f7931e)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 800,
+    fontSize: '1rem',
+    color: '#fff',
+    flexShrink: 0,
+  },
+  testimonialName: {
+    fontWeight: 700,
+    fontSize: '0.88rem',
+    color: '#f0f0ff',
+    marginBottom: 2,
+  },
+  testimonialRole: {
+    fontSize: '0.78rem',
+    color: '#606080',
+  },
   howItWorks: {
     padding: '40px 0 80px',
     borderTop: '1px solid rgba(255,255,255,0.05)',

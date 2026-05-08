@@ -1,11 +1,19 @@
-const OpenAI = require('openai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const multer  = require('multer');
 const Resume  = require('../models/Resume');
-const { extractText }       = require('../utils/fileParser');
-const { uploadFileBuffer }  = require('../utils/cloudinary');
+const { extractText }      = require('../utils/fileParser');
+const { uploadFileBuffer } = require('../utils/s3');
 
-// ─── OpenAI Client ────────────────────────────────────────────────────────────
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// ─── Gemini Client ────────────────────────────────────────────────────────────
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const geminiModel = genAI.getGenerativeModel({
+  model: 'gemini-flash-lite-latest',
+  generationConfig: {
+    temperature:      0.3,
+    maxOutputTokens:  2048,
+    responseMimeType: 'application/json',
+  },
+});
 
 // ─── Multer (Memory Storage) ──────────────────────────────────────────────────
 const ALLOWED_MIME_TYPES = [
@@ -34,19 +42,20 @@ const runMulter = (req, res) =>
     upload(req, res, (err) => (err ? reject(err) : resolve()));
   });
 
-// ─── OpenAI Prompt ────────────────────────────────────────────────────────────
+// ─── Gemini Prompt ────────────────────────────────────────────────────────────
 const buildPrompt = (resumeText, targetRole) => `
-You are an expert resume reviewer and career coach. Analyze the following resume for the role of "${targetRole}".
+You are a brutally honest expert resume reviewer. Analyze the following resume for the role of "${targetRole}".
 
 Return ONLY a valid JSON object (no markdown, no extra text) with exactly this structure:
 {
-  "overallScore": <integer 0-100>,
+  "overallScore": <number 0.0-10.0, one decimal place>,
   "sections": [
     {
       "name": "<section name>",
-      "score": <integer 0-100>,
-      "feedback": "<specific constructive feedback>",
-      "fix": "<concrete actionable fix suggestion>"
+      "score": <number 0.0-10.0, one decimal place>,
+      "issue": "<what is specifically wrong or weak — be direct and critical>",
+      "reason": "<why this is a problem for the '${targetRole}' role — explain the impact>",
+      "fix": "<concrete, actionable suggestion to improve this section immediately>"
     }
   ],
   "missingKeywords": ["<keyword1>", "<keyword2>", ...],
@@ -54,11 +63,14 @@ Return ONLY a valid JSON object (no markdown, no extra text) with exactly this s
 }
 
 Rules:
-- Evaluate these sections (if present): Summary/Objective, Skills, Work Experience, Education, Projects, Certifications, Achievements
-- missingKeywords: list 5-15 important keywords/skills for "${targetRole}" that are absent from the resume
-- strengths: list 3-6 genuine strengths found in the resume
-- Be honest, specific, and actionable. Scores should reflect real quality.
-- overallScore should be a weighted average considering all sections
+- Evaluate ALL present sections: Summary/Objective, Skills, Work Experience, Education, Projects, Certifications, Achievements
+- Scores are out of 10 (e.g. 7.5), not 100
+- overallScore: weighted average of all sections
+- issue: be direct and specific — name the actual problem (e.g. "No quantified achievements", "Summary is generic")
+- reason: explain the recruiter/hiring impact clearly
+- fix: give a specific, immediately actionable suggestion
+- missingKeywords: 5-15 keywords/skills critical for "${targetRole}" missing from the resume
+- strengths: 3-6 genuine positives found in the resume
 
 RESUME TEXT:
 ---
@@ -90,13 +102,21 @@ const parseAIResponse = (raw) => {
     throw new Error('AI response missing required fields.');
   }
 
+  // Clamp score to 0-10 range (handle both 0-100 and 0-10 responses)
+  const normalise = (n) => {
+    const num = parseFloat(n) || 0;
+    // If model returned 0-100 range, divide by 10
+    return num > 10 ? Math.round((num / 10) * 10) / 10 : Math.round(num * 10) / 10;
+  };
+
   return {
-    overallScore: Math.min(100, Math.max(0, Math.round(overallScore))),
+    overallScore: Math.min(10, Math.max(0, normalise(overallScore))),
     sections: sections.map((s) => ({
-      name:     String(s.name || '').trim(),
-      score:    Math.min(100, Math.max(0, Math.round(Number(s.score) || 0))),
-      feedback: String(s.feedback || '').trim(),
-      fix:      String(s.fix || '').trim(),
+      name:   String(s.name   || '').trim(),
+      score:  Math.min(10, Math.max(0, normalise(s.score))),
+      issue:  String(s.issue  || s.feedback || '').trim(),
+      reason: String(s.reason || '').trim(),
+      fix:    String(s.fix    || '').trim(),
     })),
     missingKeywords: missingKeywords.map((k) => String(k).trim()).filter(Boolean),
     strengths:       strengths.map((s) => String(s).trim()).filter(Boolean),
@@ -126,25 +146,15 @@ const analyzeResume = async (req, res, next) => {
     // 1. Extract text
     const extractedText = await extractText(req.file.buffer, req.file.mimetype);
 
-    // 2. Call OpenAI
-    const completion = await openai.chat.completions.create({
-      model:       'gpt-3.5-turbo',
-      temperature: 0.3,
-      max_tokens:  2000,
-      messages: [
-        {
-          role:    'system',
-          content: 'You are an expert resume reviewer. Always respond with valid JSON only.',
-        },
-        {
-          role:    'user',
-          content: buildPrompt(extractedText, targetRole),
-        },
-      ],
-    });
+    // 2. Call Gemini
+    const prompt = [
+      'You are an expert resume reviewer. Always respond with valid JSON only.',
+      buildPrompt(extractedText, targetRole),
+    ].join('\n\n');
 
-    const rawResponse = completion.choices[0]?.message?.content || '';
-    const aiFeedback  = parseAIResponse(rawResponse);
+    const geminiResult = await geminiModel.generateContent(prompt);
+    const rawResponse  = geminiResult.response.text();
+    const aiFeedback   = parseAIResponse(rawResponse);
 
     return res.status(200).json({
       success: true,
@@ -164,6 +174,17 @@ const analyzeResume = async (req, res, next) => {
         ? 'File size exceeds 5 MB limit.'
         : err.message;
       return res.status(400).json({ error: msg });
+    }
+    // Gemini API errors — surface a useful message
+    const geminiMsg = err?.message || '';
+    if (err.status === 429 || geminiMsg.includes('429')) {
+      return res.status(429).json({ error: 'AI quota exceeded. Please try again in a moment.' });
+    }
+    if (geminiMsg.includes('not found') || geminiMsg.includes('404')) {
+      return res.status(502).json({ error: 'AI model unavailable. Please try again later.' });
+    }
+    if (err.status === 400 || err.status === 403 || geminiMsg.includes('API key')) {
+      return res.status(502).json({ error: 'AI service error. Check your Gemini API key.' });
     }
     next(err);
   }
@@ -196,21 +217,21 @@ const saveResume = async (req, res, next) => {
       return res.status(400).json({ error: 'Invalid aiFeedback JSON.' });
     }
 
-    // Upload to Cloudinary if file provided
-    let cloudinaryUrl    = null;
-    let cloudinaryPublicId = null;
+    // Upload to S3 if file provided
+    let s3Url = null;
+    let s3Key = null;
 
     if (req.file) {
       const result = await uploadFileBuffer(req.file.buffer, req.file.originalname);
-      cloudinaryUrl      = result.url;
-      cloudinaryPublicId = result.publicId;
+      s3Url = result.url;
+      s3Key = result.key;
     }
 
     const resume = await Resume.create({
       fileName,
       targetRole,
-      cloudinaryUrl,
-      cloudinaryPublicId,
+      s3Url,
+      s3Key,
       extractedText,
       aiFeedback,
       fileSize: fileSize ? Number(fileSize) : 0,
@@ -296,11 +317,11 @@ const deleteResume = async (req, res, next) => {
       return res.status(404).json({ error: 'Resume record not found.' });
     }
 
-    // Remove from Cloudinary
-    if (resume.cloudinaryPublicId) {
-      const { deleteFile } = require('../utils/cloudinary');
-      await deleteFile(resume.cloudinaryPublicId).catch((e) =>
-        console.warn('Cloudinary delete warning:', e.message)
+    // Remove from S3
+    if (resume.s3Key) {
+      const { deleteFile } = require('../utils/s3');
+      await deleteFile(resume.s3Key).catch((e) =>
+        console.warn('S3 delete warning:', e.message)
       );
     }
 

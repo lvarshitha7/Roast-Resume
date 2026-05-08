@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import axios from 'axios';
+import ResultModal from '../components/ResultModal';
 
 const API = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
@@ -27,11 +28,13 @@ const ROLES = [
 
 export default function HistoryPage() {
   const navigate = useNavigate();
-  const [resumes,    setResumes]    = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [deleting,   setDeleting]   = useState(null);
-  const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
-  const [roleFilter, setRoleFilter] = useState('');
+  const [resumes,     setResumes]     = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [deleting,    setDeleting]    = useState(null);
+  const [pagination,  setPagination]  = useState({ page: 1, pages: 1, total: 0 });
+  const [roleFilter,  setRoleFilter]  = useState('');
+  const [dbDown,      setDbDown]      = useState(false);
+  const [viewResume,  setViewResume]  = useState(null);
 
   const fetchHistory = useCallback(async (page = 1, role = '') => {
     setLoading(true);
@@ -41,8 +44,13 @@ export default function HistoryPage() {
       const { data } = await axios.get(`${API}/api/resume/history`, { params });
       setResumes(data.data.resumes);
       setPagination(data.data.pagination);
+      setDbDown(false);
     } catch (err) {
-      toast.error('Failed to load history.');
+      if (err.response?.status === 503) {
+        setDbDown(true);
+      } else {
+        toast.error('Failed to load history.');
+      }
     } finally {
       setLoading(false);
     }
@@ -68,7 +76,19 @@ export default function HistoryPage() {
 
   return (
     <div style={styles.page}>
+      {viewResume && <ResultModal resume={viewResume} onClose={() => setViewResume(null)} />}
       <div className="container">
+
+        {/* DB unavailable banner */}
+        {dbDown && (
+          <div style={styles.dbBanner}>
+            <strong>⚠️ Database Unavailable</strong>
+            <p style={{ marginTop: 6, fontSize: '0.85rem', opacity: 0.85 }}>
+              The history feature requires a database connection which is currently unreachable.
+              You can still <button onClick={() => navigate('/')} style={styles.dbBannerLink}>analyze resumes</button> — results just won't be saved.
+            </p>
+          </div>
+        )}
 
         {/* Header */}
         <div style={styles.header}>
@@ -168,14 +188,23 @@ export default function HistoryPage() {
                   {/* Footer */}
                   <div style={styles.cardFooter}>
                     <span style={styles.cardDate}>{formatDate(r.createdAt)}</span>
-                    <button
-                      onClick={() => handleDelete(r._id)}
-                      disabled={deleting === r._id}
-                      style={styles.deleteBtn}
-                      aria-label={`Delete ${r.fileName}`}
-                    >
-                      {deleting === r._id ? '…' : '🗑'}
-                    </button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        onClick={() => setViewResume(r)}
+                        style={styles.viewBtn}
+                        aria-label={`View full analysis for ${r.fileName}`}
+                      >
+                        👁 View
+                      </button>
+                      <button
+                        onClick={() => handleDelete(r._id)}
+                        disabled={deleting === r._id}
+                        style={styles.deleteBtn}
+                        aria-label={`Delete ${r.fileName}`}
+                      >
+                        {deleting === r._id ? '…' : '🗑'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -211,6 +240,26 @@ export default function HistoryPage() {
 }
 
 const styles = {
+  dbBanner: {
+    marginBottom: 24,
+    padding: '16px 20px',
+    background: 'rgba(251,191,36,0.07)',
+    border: '1px solid rgba(251,191,36,0.25)',
+    borderRadius: 12,
+    color: '#fbbf24',
+    fontSize: '0.9rem',
+    lineHeight: 1.5,
+  },
+  dbBannerLink: {
+    background: 'none',
+    border: 'none',
+    color: '#ff6b35',
+    fontWeight: 600,
+    cursor: 'pointer',
+    padding: 0,
+    fontSize: 'inherit',
+    textDecoration: 'underline',
+  },
   page: { padding: '40px 0 80px', minHeight: '100vh' },
   header: {
     display: 'flex',
@@ -306,6 +355,17 @@ const styles = {
     marginTop: 4,
   },
   cardDate: { fontSize: '0.75rem', color: '#404060' },
+  viewBtn: {
+    padding: '4px 12px',
+    background: 'rgba(255,107,53,0.08)',
+    border: '1px solid rgba(255,107,53,0.2)',
+    borderRadius: 6,
+    color: '#ff6b35',
+    fontSize: '0.78rem',
+    fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+  },
   deleteBtn: {
     background: 'rgba(239,68,68,0.1)',
     border: '1px solid rgba(239,68,68,0.2)',

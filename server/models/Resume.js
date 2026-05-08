@@ -20,11 +20,11 @@ const resumeSchema = new mongoose.Schema({
     trim: true,
     maxlength: [100, 'targetRole too long'],
   },
-  cloudinaryUrl: {
+  s3Url: {
     type: String,
     default: null,
   },
-  cloudinaryPublicId: {
+  s3Key: {
     type: String,
     default: null,
   },
